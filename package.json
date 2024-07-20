@@ -1,0 +1,21 @@
+{
+  "name": "employee-tracker-cms-challenge-12",
+  "version": "1.0.0",
+  "description": "A CMS to track employees across departments and roles.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TalanvorD/Employee-Tracker-CMS-Challenge-12"
+  },
+  "keywords": [],
+  "author": "Christopher Glenn",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "inquirer": "^8.2.4",
+    "pg": "^8.12.0"
+  }
+}
