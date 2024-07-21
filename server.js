@@ -1,12 +1,4 @@
-const express = require('express');
-const sequelize = require('./config/connection');
+const inquirer = require("inquirer"); // Importing packages
+const companyDB = require('./config/connection.js'); // Postgres db connection
 
-const app = express();
-const PORT = process.env.PORT || 3001;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-sequelize.sync().then(() => {
-  app.listen(PORT, () => console.log(`Now listening on ${PORT}`));
-});
