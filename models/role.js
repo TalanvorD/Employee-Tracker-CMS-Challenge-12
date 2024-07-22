@@ -1,32 +1,12 @@
-const { Model, DataTypes } = require('sequelize');
-const sequelize = require('../config/connection');
+const pool = require('../config/connection.js'); // Postgres database connection
 
-class Role extends Model {} // Model for the Role table
-
-Role.init(
-  {
-    id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true
-    },
-    title: {
-      type: DataTypes.STRING
-    },
-    salary: {
-      type: DataTypes.DECIMAL
-    },
-    department: {
-      type: DataTypes.INTEGER
-    }
-  },
-  {
-    sequelize,
-    timestamps: false,
-    freezeTableName: true,
-    underscored: true,
-    modelName: 'role'
-  }
-);
+class Role { // Class constructor for Role table entries
+  constructor(role1, role2, role3) {
+    pool.query(`INSERT INTO role (title, salary, department_id) VALUES ($1, $2, $3)`, [role1, role2, role3],
+       function (err, { rows }) {
+      console.log(rows);
+      });
+    };
+  };
 
 module.exports = Role;
