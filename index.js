@@ -25,7 +25,7 @@ const mainMenuOptions = [ // Array to hold the prompts for the main menu list
             'View All Roles',
             'Add Role',
             'Delete Role',
-            'Quit'
+            'Exit to console'
         ]
     },
 ];
@@ -36,46 +36,46 @@ function mainMenu() {
         .then((response) => {
             switch (response.selection) {
                 case 'View All Employees':
-                    viewEmployees();
+                    viewEmployees(); // Works
                     break;
                 case 'View Employees by Department':
-                    viewDepartmentEmployees();
+                    viewDepartmentEmployees(); // Works
                     break;
                 case 'View Employees by Manager':
-                    viewEmployeesManagers();
+                    viewEmployeesManagers(); // Works
                     break;
                 case 'Update Employee':
-                    updateEmployee();
+                    getEmployeeList("update"); // Works. No manager = 0 doesn't seem to work?
                     break;
                 case 'Add Employee':
-                    addEmployee();
+                    addEmployee(); // Works, improvement?
                     break;
                 case 'Delete Employee':
-                    deleteEmployee();
+                    getEmployeeList("delete"); // Works
                     break;
                 case 'View All Roles':
-                    viewRoles();
+                    viewRoles(); // Works
                     break;
                 case 'Add Role':
-                    addRole();
+                    addRole(); // Works, improvement?
                     break;
                 case 'Delete Role':
-                    deleteRole();
+                    getRoleList(); // Works
                     break;
                 case 'View All Departments':
-                    viewDepartments();
+                    viewDepartments(); // Works
                     break;
                 case 'Add Department':
-                    addDepartment();
+                    addDepartment(); // Works
                     break;
                 case 'Delete Department':
-                    deleteEmployee();
+                    getDepartmentList(); // Works
                     break;
                 case 'See budget by department':
-                    departmentBudget();
+                    departmentBudget(); // Doesn't work
                     break;
-                case 'Quit':
-                    quit();
+                case 'Exit to console':
+                    exit(); // Works
                     break;
             }
         });
@@ -95,14 +95,53 @@ async function viewEmployees() {
     }
 };
 
-async function viewDepartmentEmployees() { // This needs to be fixed!!!!!!!!!!!!!!!!
+async function viewDepartmentEmployees() {
     try {
-        // Query the database for all employees in the database by department
-        await pool.query(`SELECT * FROM employee;`,
+        // Query the database for all employees in the database sorted by department
+        await pool.query(`SELECT 
+                        department.id,
+                        department.name AS Department,
+                        CONCAT(employee.first_name, ' ', employee.last_name) AS Employee_Name,
+                        role.title AS Role_Title,
+                        role.salary,
+                        CONCAT(manager.first_name, ' ', manager.last_name) AS Manager
+                        FROM employee
+                        LEFT JOIN employee manager ON employee.manager_id = manager.id
+                        INNER JOIN role ON employee.role_id = role.id
+                        INNER JOIN department ON role.department_id = department.id
+                        ORDER BY department.name;`,
              function (err, { rows }) {
-            console.log(rows);
+                console.clear();
+                console.table(rows);
+                console.log(`\n`);
+                return mainMenu();
         });
-        await mainMenu();
+    } catch (error) {
+        console.error(error);
+    }
+};
+
+async function viewEmployeesManagers() {
+    try {
+        // Query the database for all employees in the database sorted by manager
+        await pool.query(`SELECT 
+                        employee.manager_id,
+                        CONCAT(manager.first_name, ' ', manager.last_name) AS Manager,
+                        department.name AS Department,
+                        CONCAT(employee.first_name, ' ', employee.last_name) AS Employee_Name,
+                        role.title AS Role_Title,
+                        role.salary
+                        FROM employee
+                        LEFT JOIN employee manager ON employee.manager_id = manager.id
+                        INNER JOIN role ON employee.role_id = role.id
+                        INNER JOIN department ON role.department_id = department.id
+                        ORDER BY employee.manager_id;`,
+             function (err, { rows }) {
+                console.clear();
+                console.table(rows);
+                console.log(`\n`);
+                return mainMenu();
+        });
     } catch (error) {
         console.error(error);
     }
@@ -247,7 +286,7 @@ async function addEmployee() {
             },
             {
                 type: 'number',
-                message: 'Enter manager ID for this employee (0 if there is no manager):',
+                message: 'Enter manager ID for this employee (0 if they have no manager):',
                 name: 'empManager',
                 validate: (inputCheck) => {
                     if (!inputCheck){
@@ -269,7 +308,180 @@ async function addEmployee() {
     }
 };
 
-function quit() {
+async function updateEmployee(employeeList) {
+    try {
+        const question = [
+            {
+                type: 'list',
+                message: 'Select the employee to update:',
+                name: 'employee',
+                choices: employeeList
+            },
+            {
+                type: 'number',
+                message: 'Enter the new role ID for this employee:',
+                name: 'empRole',
+                validate: (inputCheck) => {
+                    if (!inputCheck){
+                        throw new Error("That's not a valid number for salary. Please enter a number only.");
+                    } else { return true; }
+                  }
+            },
+            {
+                type: 'number',
+                message: 'Enter a new manager ID for this employee (0 if they have no manager):',
+                name: 'empManager',
+                validate: (inputCheck) => {
+                    if (!inputCheck){
+                        throw new Error("That's not a valid number for manager. Please enter a number only.");
+                    } else { return true; }
+                  }
+            }
+        ];
+
+        const answer = await inquirer.prompt(question);
+        await console.log(answer);
+
+        // Queries the database to update the employee role_id and manager_id
+		await pool.query(`UPDATE employee SET role_id = $1, manager_id = $2 WHERE id = $3`,
+            [ answer.empRole, answer.empManager, answer.employee ]);
+
+        await console.log(`Employee has been successfully updated!`);
+        await console.log(`\n`);
+        await mainMenu();
+    } catch (error) {
+        console.error(error);
+    }
+};
+
+async function removeDepartment(departmentList) {
+    try {
+        const question = [
+            {
+                type: 'list',
+                message: 'Select the department to be removed:',
+                name: 'department',
+                choices: departmentList
+            }
+        ];
+
+        const answer = await inquirer.prompt(question);
+
+        // Queries the database to removes the department by id from the database
+		await pool.query(`DELETE FROM department WHERE id = $1`, [ answer.department ]);
+
+        await console.log(`Department has been successfully removed.`);
+        await console.log(`\n`);
+        await mainMenu();
+    } catch (error) {
+        console.error(error);
+    }
+};
+
+async function removeEmployee(employeeList) {
+    try {
+        const question = [
+            {
+                type: 'list',
+                message: 'Select the employee to be removed:',
+                name: 'employee',
+                choices: employeeList
+            }
+        ];
+
+        const answer = await inquirer.prompt(question);
+
+        // Queries the database to removes the department by id from the database
+		await pool.query(`DELETE FROM employee WHERE id = $1`, [ answer.employee ]);
+
+        await console.log(`${answer.employee} successfully removed from Departments!`);
+        await console.log(`\n`);
+        await mainMenu();
+    } catch (error) {
+        console.error(error);
+    }
+};
+
+async function removeRole(roleList) {
+    try {
+        const question = [
+            {
+                type: 'list',
+                message: 'Select the role to be removed:',
+                name: 'role',
+                choices: roleList
+            }
+        ];
+
+        const answer = await inquirer.prompt(question);
+
+        // Queries the database to removes the role by id from the database
+		await pool.query(`DELETE FROM role WHERE id = $1`, [ answer.role ]);
+
+        await console.log(`Role has been successfully removed.`);
+        await console.log(`\n`);
+        await mainMenu();
+    } catch (error) {
+        console.error(error);
+    }
+};
+
+async function getEmployeeList(operation) { // Queries the database for a list of employees
+    try {
+        await pool.query('SELECT id, first_name, last_name FROM employee', (err, { rows }) => {
+            if (err) throw err;
+            const empList = rows.map(({ id, first_name, last_name }) => ({
+              value: id,
+              name: `${first_name} ${last_name}`
+            }));
+            if (operation === "delete"){
+                removeEmployee(empList);
+            } else if (operation === "update") {
+                updateEmployee(empList);
+            } else {
+                console.log("Something went wrong!");
+                return;
+            };
+        });
+    } catch (error) {
+        console.error(error);
+        return;
+    };
+  };
+
+  async function getDepartmentList() { // Queries the database for a list of departments and calls the removeDepartment function with the result
+    try {
+        await pool.query('SELECT id, name FROM department', (err, { rows }) => {
+            if (err) throw err;
+            const deptList = rows.map(({ id, name }) => ({
+              value: id,
+              name: `${name}`
+            }));
+            removeDepartment(deptList);
+        });
+    } catch (error) {
+        console.error(error);
+        return;
+    };
+  };
+
+  async function getRoleList() { // Queries the database for a list of roles and calls the removeRole function with the result
+    try {
+        await pool.query('SELECT id, title FROM role', (err, { rows }) => {
+            if (err) throw err;
+            const roleList = rows.map(({ id, title }) => ({
+              value: id,
+              name: `${title}`
+            }));
+            removeRole(roleList);
+        });
+    } catch (error) {
+        console.error(error);
+        return;
+    };
+  };
+
+function exit() {
     console.clear();    
     console.log('Goodbye!');
     process.exit();
