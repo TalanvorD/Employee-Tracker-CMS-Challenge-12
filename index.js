@@ -1,10 +1,14 @@
 const inquirer = require("inquirer"); // Importing packages
 const pool = require('./config/connection.js'); // Postgres database connection
-const Department = require('./models/department.js');
+const Department = require('./models/department.js'); // Constructors for Department, Employee and Role
 const Employee = require('./models/employee.js');
 const Role = require('./models/role.js');
 
 pool.connect();
+
+const departmentList = getDepartmentList();
+const roleList = getRoleList();
+const employeeList = getEmployeeList();
 
 const mainMenuOptions = [ // Array to hold the prompts for the main menu list
     {
@@ -45,10 +49,10 @@ function mainMenu() {
                     viewEmployeesManagers(); // Works
                     break;
                 case 'Update Employee':
-                    getEmployeeList("update"); // Works. No manager = 0 doesn't seem to work?
+                    getEmployeeList("update"); // Works
                     break;
                 case 'Add Employee':
-                    addEmployee(); // Works, improvement?
+                    addEmployee(); // Works
                     break;
                 case 'Delete Employee':
                     getEmployeeList("delete"); // Works
@@ -57,10 +61,10 @@ function mainMenu() {
                     viewRoles(); // Works
                     break;
                 case 'Add Role':
-                    addRole(); // Works, improvement?
+                    getDepartmentList("addRole"); // Works
                     break;
                 case 'Delete Role':
-                    getRoleList(); // Works
+                    getRoleList("delete"); // Works
                     break;
                 case 'View All Departments':
                     viewDepartments(); // Works
@@ -69,10 +73,10 @@ function mainMenu() {
                     addDepartment(); // Works
                     break;
                 case 'Delete Department':
-                    getDepartmentList(); // Works
+                    getDepartmentList("delete"); // Works
                     break;
-                case 'See budget by department':
-                    departmentBudget(); // Doesn't work
+                case 'See budgets of departments':
+                    getDepartmentList("budget"); // Not implemented
                     break;
                 case 'Exit to console':
                     exit(); // Works
@@ -81,10 +85,17 @@ function mainMenu() {
         });
 };
 
-async function viewEmployees() {
+async function viewEmployees() { // Query the database for all employees in the database and displays the result
     try {
-        // Query the database for all employees in the database
-        await pool.query('SELECT * FROM employee;', function (err, { rows }) {
+        await pool.query(`SELECT employee.id,
+                          CONCAT(employee.first_name, ' ', employee.last_name) AS employee_name, role.title AS job_title, role.salary, department.name AS department,
+                          CONCAT(manager.first_name, ' ', manager.last_name) AS manager
+                          FROM employee
+                          LEFT JOIN employee manager ON employee.manager_id = manager.id
+                          INNER JOIN role ON employee.role_id = role.id
+                          INNER JOIN department ON role.department_id = department.id
+                          ORDER BY employee.id;`,
+                          function (err, { rows }) {
             console.clear();
             console.table(rows);
             console.log(`\n`);
@@ -95,12 +106,9 @@ async function viewEmployees() {
     }
 };
 
-async function viewDepartmentEmployees() {
+async function viewDepartmentEmployees() { // Query the database for all employees in the database sorted by department and displays the result
     try {
-        // Query the database for all employees in the database sorted by department
-        await pool.query(`SELECT 
-                        department.id,
-                        department.name AS Department,
+        await pool.query(`SELECT department.id, department.name AS Department,
                         CONCAT(employee.first_name, ' ', employee.last_name) AS Employee_Name,
                         role.title AS Role_Title,
                         role.salary,
@@ -110,20 +118,19 @@ async function viewDepartmentEmployees() {
                         INNER JOIN role ON employee.role_id = role.id
                         INNER JOIN department ON role.department_id = department.id
                         ORDER BY department.name;`,
-             function (err, { rows }) {
+                        function (err, { rows }) {
                 console.clear();
                 console.table(rows);
                 console.log(`\n`);
                 return mainMenu();
-        });
+            });
     } catch (error) {
         console.error(error);
     }
 };
 
-async function viewEmployeesManagers() {
+async function viewEmployeesManagers() { // Query the database for all employees in the database sorted by manager and displays the result
     try {
-        // Query the database for all employees in the database sorted by manager
         await pool.query(`SELECT 
                         employee.manager_id,
                         CONCAT(manager.first_name, ' ', manager.last_name) AS Manager,
@@ -136,20 +143,19 @@ async function viewEmployeesManagers() {
                         INNER JOIN role ON employee.role_id = role.id
                         INNER JOIN department ON role.department_id = department.id
                         ORDER BY employee.manager_id;`,
-             function (err, { rows }) {
+                        function (err, { rows }) {
                 console.clear();
                 console.table(rows);
                 console.log(`\n`);
                 return mainMenu();
-        });
+            });
     } catch (error) {
         console.error(error);
     }
 };
 
-async function viewDepartments() {
+async function viewDepartments() { // Query the database for all departments in the database and then displays the result
     try {
-        // Query the database for all departments in the database
         await pool.query('SELECT * FROM department', function (err, { rows }) {
             console.clear();
             console.table(rows);
@@ -161,9 +167,8 @@ async function viewDepartments() {
     }
 };
 
-async function viewRoles() {
+async function viewRoles() { // Query the database for all roles in the database and then displays the result
     try {
-        // Query the database for all roles in the database
         await pool.query('SELECT * FROM role;', function (err, { rows }) {
             console.clear();
             console.table(rows);
@@ -175,25 +180,54 @@ async function viewRoles() {
     }
 };
 
-async function addDepartment() {
+/* Ran out of time for this, perhaps revisit it later
+async function departmentBudget(departmentList){
+    try {
+        const question = [
+            {
+                type: 'list',
+                message: 'Select the department to see their budget:',
+                name: 'department',
+                choices: departmentList
+            }
+        ];
+
+        const answer = await inquirer.prompt(question);
+
+        // Queries the database to view its budget
+        await pool.query(`DELETE FROM department WHERE id = $1`, [answer.department]);
+
+        await pool.query('SELECT department_id FROM department WHERE id = $1', [answer.department], function (err, { rows }) {
+            console.clear();
+            console.table(rows);
+            console.log(`\n`);
+            return mainMenu();
+        });
+
+    } catch (error) {
+        console.error(error);
+    }
+}; */
+
+async function addDepartment() { // Adds a department to the database, asking for what it should be named
     try {
         const question = [
             {
                 type: 'input',
                 message: 'Enter the department name:',
                 name: 'departmentName',
-                validate: (textCheck) => {
-                    if (textCheck.length > 30){
+                validate: (inputCheck) => {
+                    if (inputCheck.length > 30) {
                         return "Department name is too long. Please enter up to 30 characters.";
                     } else { return true; }
-                  }
+                }
             }
         ];
 
         const answer = await inquirer.prompt(question);
 
         // Insert the department into the database with class constructor
-		const newDepartment = await new Department(answer.departmentName);
+        const newDepartment = await new Department(answer.departmentName);
 
         await console.log(`${answer.departmentName} successfully added to Departments!`);
         await console.log(`\n`);
@@ -203,7 +237,7 @@ async function addDepartment() {
     }
 };
 
-async function addRole() {
+async function addRole(deptList) { // Adds a role to the database, asking for a title, salary and a department
     try {
         const question = [
             {
@@ -211,38 +245,34 @@ async function addRole() {
                 message: 'Enter the role title:',
                 name: 'roleTitle',
                 validate: (inputCheck) => {
-                    if (inputCheck.length > 30){
+                    if (inputCheck.length > 30) {
                         throw new Error("Role title is too long. Please enter up to 30 characters.");
                     } else { return true; }
-                  }
+                }
             },
             {
                 type: 'number',
                 message: 'Enter salary for this role:',
                 name: 'roleSalary',
                 validate: (inputCheck) => {
-                    if (!inputCheck){
-                        throw new Error("That's not a valid number for salary. Please enter a number only.");
+                    if (typeof inputCheck !== 'number' || inputCheck <= 0) {
+                        throw new Error("That's not a valid number for salary. Please enter a greater than 0 number only.");
                     } else { return true; }
-                  }
+                }
             },
             {
-                type: 'number',
-                message: 'Enter department ID for this role:',
+                type: 'list',
+                message: 'Select the department for this role:',
                 name: 'roleDepartment',
-                validate: (inputCheck) => {
-                    if (!inputCheck){
-                        throw new Error("That's not a valid number for department. Please enter a number only.");
-                    } else { return true; }
-                  }
+                choices: deptList
             }
         ];
 
         const answer = await inquirer.prompt(question);
 
         // Insert the role into the database with class constructor
-		const newRole = await new Role(answer.roleTitle, answer.roleSalary, answer.roleDepartment);
-        
+        const newRole = await new Role(answer.roleTitle, answer.roleSalary, answer.roleDepartment);
+
         await console.log(`${answer.roleTitle} successfully added to Roles!`);
         await console.log(`\n`);
         await mainMenu();
@@ -251,7 +281,7 @@ async function addRole() {
     }
 };
 
-async function addEmployee() {
+async function addEmployee() { // Adds an employee to the database, asking for a first name, last name, role and a manager (if they have one)
     try {
         const question = [
             {
@@ -259,48 +289,48 @@ async function addEmployee() {
                 message: 'Enter the employees first name:',
                 name: 'fName',
                 validate: (inputCheck) => {
-                    if (inputCheck.length > 30){
+                    if (inputCheck.length > 30) {
                         throw new Error("First name is too long. Please enter up to 30 characters.");
                     } else { return true; }
-                  }
+                }
             },
             {
                 type: 'input',
                 message: 'Enter the employees last name:',
                 name: 'lName',
                 validate: (inputCheck) => {
-                    if (inputCheck.length > 30){
+                    if (inputCheck.length > 30) {
                         throw new Error("Last name is too long. Please enter up to 30 characters.");
                     } else { return true; }
-                  }
+                }
             },
             {
                 type: 'number',
                 message: 'Enter the role id for this employee:',
                 name: 'empRole',
                 validate: (inputCheck) => {
-                    if (!inputCheck){
-                        throw new Error("That's not a valid number for salary. Please enter a number only.");
+                    if (typeof inputCheck !== 'number' || inputCheck <= 0) {
+                        throw new Error("That's not a valid number for role. Please enter a number only.");
                     } else { return true; }
-                  }
+                }
             },
             {
                 type: 'number',
                 message: 'Enter manager ID for this employee (0 if they have no manager):',
                 name: 'empManager',
                 validate: (inputCheck) => {
-                    if (!inputCheck){
-                        throw new Error("That's not a valid number for department. Please enter a number only.");
+                    if (typeof inputCheck !== 'number') {
+                        throw new Error("That's not a valid number for manager. Please enter a number only.");
                     } else { return true; }
-                  }
+                }
             }
         ];
 
         const answer = await inquirer.prompt(question);
 
         // Insert the role into the database with class constructor
-		const newEmployee = await new Employee(answer.fName, answer.lName, answer.empRole, answer.empManager);
-        await console.log(`${answer.fName} ${answer.lName} successfully added to Departments!`);
+        const newEmployee = await new Employee(answer.fName, answer.lName, answer.empRole, answer.empManager);
+        await console.log(`${answer.fName} ${answer.lName} successfully added to Employees!`);
         await console.log(`\n`);
         await mainMenu();
     } catch (error) {
@@ -308,7 +338,7 @@ async function addEmployee() {
     }
 };
 
-async function updateEmployee(employeeList) {
+async function updateEmployee(employeeList) { // Updates an employee to change their role and/or manager
     try {
         const question = [
             {
@@ -322,29 +352,34 @@ async function updateEmployee(employeeList) {
                 message: 'Enter the new role ID for this employee:',
                 name: 'empRole',
                 validate: (inputCheck) => {
-                    if (!inputCheck){
-                        throw new Error("That's not a valid number for salary. Please enter a number only.");
+                    if (typeof inputCheck !== 'number' || inputCheck <= 0) {
+                        throw new Error("That's not a valid number for role. Please enter a number only.");
                     } else { return true; }
-                  }
+                }
             },
             {
                 type: 'number',
                 message: 'Enter a new manager ID for this employee (0 if they have no manager):',
                 name: 'empManager',
                 validate: (inputCheck) => {
-                    if (!inputCheck){
+                    if (typeof inputCheck !== 'number') {
                         throw new Error("That's not a valid number for manager. Please enter a number only.");
                     } else { return true; }
-                  }
+                }
             }
         ];
 
         const answer = await inquirer.prompt(question);
-        await console.log(answer);
 
         // Queries the database to update the employee role_id and manager_id
-		await pool.query(`UPDATE employee SET role_id = $1, manager_id = $2 WHERE id = $3`,
-            [ answer.empRole, answer.empManager, answer.employee ]);
+        if (answer.empManager == 0) {
+            await pool.query(`UPDATE employee SET role_id = $1, manager_id = NULL WHERE id = $2`,
+                [answer.empRole, answer.employee]);
+        } else {
+            await pool.query(`UPDATE employee SET role_id = $1, manager_id = NULL WHERE id = $3`,
+                [answer.empRole, answer.empManager, answer.employee]);
+        };
+
 
         await console.log(`Employee has been successfully updated!`);
         await console.log(`\n`);
@@ -354,7 +389,7 @@ async function updateEmployee(employeeList) {
     }
 };
 
-async function removeDepartment(departmentList) {
+async function removeDepartment(departmentList) { // Removes a department from the database
     try {
         const question = [
             {
@@ -368,7 +403,7 @@ async function removeDepartment(departmentList) {
         const answer = await inquirer.prompt(question);
 
         // Queries the database to removes the department by id from the database
-		await pool.query(`DELETE FROM department WHERE id = $1`, [ answer.department ]);
+        await pool.query(`DELETE FROM department WHERE id = $1`, [answer.department]);
 
         await console.log(`Department has been successfully removed.`);
         await console.log(`\n`);
@@ -378,7 +413,7 @@ async function removeDepartment(departmentList) {
     }
 };
 
-async function removeEmployee(employeeList) {
+async function removeEmployee(employeeList) { // Removes an employee from the database
     try {
         const question = [
             {
@@ -392,7 +427,7 @@ async function removeEmployee(employeeList) {
         const answer = await inquirer.prompt(question);
 
         // Queries the database to removes the department by id from the database
-		await pool.query(`DELETE FROM employee WHERE id = $1`, [ answer.employee ]);
+        await pool.query(`DELETE FROM employee WHERE id = $1`, [answer.employee]);
 
         await console.log(`${answer.employee} successfully removed from Departments!`);
         await console.log(`\n`);
@@ -402,7 +437,7 @@ async function removeEmployee(employeeList) {
     }
 };
 
-async function removeRole(roleList) {
+async function removeRole(roleList) { // Removes a role from the database
     try {
         const question = [
             {
@@ -416,7 +451,7 @@ async function removeRole(roleList) {
         const answer = await inquirer.prompt(question);
 
         // Queries the database to removes the role by id from the database
-		await pool.query(`DELETE FROM role WHERE id = $1`, [ answer.role ]);
+        await pool.query(`DELETE FROM role WHERE id = $1`, [answer.role]);
 
         await console.log(`Role has been successfully removed.`);
         await console.log(`\n`);
@@ -431,60 +466,126 @@ async function getEmployeeList(operation) { // Queries the database for a list o
         await pool.query('SELECT id, first_name, last_name FROM employee', (err, { rows }) => {
             if (err) throw err;
             const empList = rows.map(({ id, first_name, last_name }) => ({
-              value: id,
-              name: `${first_name} ${last_name}`
+                value: id,
+                name: `${first_name} ${last_name}`
             }));
-            if (operation === "delete"){
-                removeEmployee(empList);
+            if (operation === "delete") {
+                removeEmployee(empList); // Calls the removeEmployee function and passes it a list to use as a selection
             } else if (operation === "update") {
-                updateEmployee(empList);
+                updateEmployee(empList); // Calls the updateEmployee function and passes it a list to use as a selection
             } else {
-                console.log("Something went wrong!");
-                return;
+                return empList;
             };
         });
     } catch (error) {
         console.error(error);
         return;
     };
-  };
+};
 
-  async function getDepartmentList() { // Queries the database for a list of departments and calls the removeDepartment function with the result
+async function getDepartmentList(operation) { // Queries the database for a list of departments
     try {
         await pool.query('SELECT id, name FROM department', (err, { rows }) => {
             if (err) throw err;
             const deptList = rows.map(({ id, name }) => ({
-              value: id,
-              name: `${name}`
+                value: id,
+                name: `${name}`
             }));
-            removeDepartment(deptList);
+            if (operation === "delete") { // Calls the removeDepartment function and passes it a list to use as a selection
+                removeDepartment(deptList);
+            } else if (operation === "addRole") { // Calls the addRole function and passes it a list to use as a selection
+                addRole(deptList);
+            } else if (operation == "budget") {
+                departmentBudget(deptList);
+            } else {
+                return;
+            }
         });
     } catch (error) {
         console.error(error);
         return;
     };
-  };
+};
 
-  async function getRoleList() { // Queries the database for a list of roles and calls the removeRole function with the result
+async function getRoleList(operation) { // Queries the database for a list of roles
     try {
         await pool.query('SELECT id, title FROM role', (err, { rows }) => {
             if (err) throw err;
             const roleList = rows.map(({ id, title }) => ({
-              value: id,
-              name: `${title}`
+                value: id,
+                name: `${title}`
             }));
-            removeRole(roleList);
+            if (operation === "delete") { // Calls the removeList function and passes it a list to use as a selection
+                removeRole(roleList);
+            } else if (operation === "add") { // Calls the addEmployee function and passes it a list to use as a selection
+                addRole(roleList);
+            } else {
+                return roleList;
+            };
         });
     } catch (error) {
         console.error(error);
         return;
     };
-  };
+};
 
-function exit() {
-    console.clear();    
+/* // I'd like to get this working so it's more universal but there's not enough time. Perhaps I can revisit it after turning it in.
+async function getAllList(operation) { // Queries the database for a list of employees, roles and departments.
+  try { 
+      await pool.query('SELECT id, first_name, last_name FROM employee', (err, { rows }) => {
+          if (err) throw err;
+          const empList = rows.map(({ id, first_name, last_name }) => ({
+            value: id,
+            name: `${first_name} ${last_name}`}));
+          if (operation === "delete"){
+              removeEmployee(empList);
+          } else if (operation === "update") {
+              updateEmployee(empList);
+          } else {
+              console.log("Something went wrong!");
+              return;
+          };
+      });
+      await pool.query('SELECT id, title FROM role', (err, { rows }) => {
+          if (err) throw err;
+          const roleList = rows.map(({ id, title }) => ({
+            value: id,
+            name: `${title}`
+          }));
+          if (operation === "delete"){
+              removeRole(roleList);
+          } else if (operation === "add") {
+              addRole(roleList);
+          } else {
+              console.log("Something went wrong!");
+              return;
+          };
+      });
+      await pool.query('SELECT id, name FROM department', (err, { rows }) => {
+          if (err) throw err;
+          const deptList = rows.map(({ id, name }) => ({
+            value: id,
+            name: `${name}`
+          }));
+          if (operation === "delete"){
+              removeDepartment(deptList);
+          } else if (operation === "addRole") {
+              addRole(deptList);
+          } else {
+              console.log("Something went wrong!");
+              return;
+          };
+      });
+  } catch (error) {
+      console.error(error);
+      return;
+  };
+}; */
+
+function exit() { // Exits the menu back to the console
+    console.clear();
     console.log('Goodbye!');
     process.exit();
 };
 
-mainMenu();
+mainMenu(); // Starts the mainMenu on running index.js with node
